@@ -6,6 +6,6 @@ public class StringPractice {
 
         //hello
         System.out.println("Aselya!");
-
+        System.out.println();
     }
 }
