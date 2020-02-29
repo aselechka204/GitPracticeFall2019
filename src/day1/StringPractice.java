@@ -5,7 +5,7 @@ public class StringPractice {
         System.out.println("Hello, world!");
 
         //hello
-        System.out.println("Aselya!");
+        System.out.println("Aselya!!!!!!!!!!!!!!!");
         System.out.println();
     }
 }
