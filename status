@@ -1,75 +1,85 @@
-#!/usr/bin/env python3
-
 import os
 import requests
+import csv
 import time
 from functools import partial
 from multiprocessing import Pool
 
+class Connections:
+    def __init__(self, n: int, node:str, peer: str, time: int, tx: int, rx: int, code: int):
+        self.iteration = n
+        self.node = node
+        self.peer = peer
+        self.time = time
+        self.tx = tx
+        self.rx = rx
+        self.code = code  # Added status_code
+
+class NodeStatus:
+    def __init__(self, node:str, success_rate: float):
+        self.node = node
+        self.success_rate = success_rate
 
 
 def request(hostname, iters, wait):
-    """
-    Make the requests to the nodes to see if they are active
-    ----------
-    Parameters
-    ----------
-    hostname : str
-        The nodes names
-    iters: int
-        Amount of iterations to make
-    wait: int
-        Seconds to wait between iterations
-
-    Returns
-    -------
-    list
-        a list of the information receive from the requests
-    """
-    print('Running requests on %s' %hostname)
+    print("Running requests on %s" %hostname)
     results = []
+    seconds = 0
     # sending get request and saving the response as response object
     for i in range(iters):
-        print('Running iters on %s' %hostname)
+        print("Running iters on %s" %hostname)
         time.sleep(wait)
         try:
-            r = requests.get('http://%s:9091/Info' %hostname, timeout=5)
-            results.append(r.status_code)
-        except requests.exceptions.ConnectionError as e:
-            results.append(e)
-        except requests.exceptions.RequestException as e:            
+            r = requests.get("http://%s:9091/Info" %hostname, timeout=5)
+            # extracting data in json format
+            data = r.json()['node']['connections']
+            for d in data:
+                # Get the time information
+                second = (time.time() - (d['peerConnectionTime']/1000))
+                # Added status code to connection info
+                nodeinfo = Connections(i, hostname, d['peerName'], second, d['tx'], d['rx'], r.status_code)
+                results.append(nodeinfo)
+        except requests.exceptions.RequestException as e:
             print(e)
-    
     return results
 
-# get the nodes from the environment variable NODES
-nodes = os.environ.get('NODES').split(';')
+def check():
+    # get nodes
+    nodes = os.environ.get('NODES').split(";")
+    p = partial(request, iters=4, wait=1)
 
-p = partial(request, iters=6, wait=2)
+    with Pool(len(nodes)) as pool:
+        print("Running multithreading")
+        node_data = pool.map(p,nodes, 1)
 
-# Run parallel process to make the requests to the nodes
-with Pool(len(nodes)) as pool:
-    print("Testing nodes")
-    node_data = pool.map(p,nodes, 1)
+    with open('data.csv', 'w',) as csvfile:
+        print("Running csv")
+        writer = csv.writer(csvfile)
+        writer.writerow(['iteration', 'nodeName','peerName', 'time[s]', 'tx', 'rx', 'status_code'])
+        for nd in node_data:
+            for r in nd:
+                writer.writerow([r.iteration, r.node, r.peer, r.time, r.tx, r.rx, r.code])
 
-working_nodes = []
+    node_statuses = [] # Calculating nodes' statuses
+    for node in node_data:
+        if len(node) > 0:
+            all_iterations = len(node) # All requests count to the node
+            successful_count = len([n for n in node if n.code == 200]) # Working requests count
+            status = NodeStatus(node[0].node, successful_count / all_iterations * 100)
+            node_statuses.append(status)
 
-# Acceptance Criteria
-pass_threshold = 0.9
+    with open('node_statuses.csv', 'w',) as csvfile: # Writing statuses to file
+        print("Writing node statuses")
+        writer = csv.writer(csvfile)
+        writer.writerow(['nodeName', 'successRate', 'time'])
+        for ns in node_statuses:
+            writer.writerow([ns.node, ns.success_rate, time.time()])
 
-for node in node_data:
-    # Counts the amount of good requests that were made
-    pass_request = node.count(200)
-    if pass_request > (len(node)*pass_threshold):
-        working_nodes.append(node)
-
-
-# Creates the file with the results, 1 for passed and 0 for failed
-result_file = open('node_result.txt', 'w')
-
-if len(working_nodes) == len(nodes):
-    result_file.write('1')
-else:
-    result_file.write('0')
-
-result_file.close()
+if __name__ == "__main__":
+    while True:
+        try:
+            check()
+            time.sleep(5 * 60)
+        except KeyboardInterrupt:
+            print('exiting...')
+            break
