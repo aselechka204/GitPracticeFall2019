@@ -15,7 +15,6 @@ class Connections:
         self.rx = rx
         self.code = code  # Added status_code
 
-
 class NodeStatus:
     def __init__(self, node:str, success_rate: float):
         self.node = node
@@ -44,7 +43,6 @@ def request(hostname, iters, wait):
             print(e)
     return results
 
-
 def check():
     # get nodes
     nodes = os.environ.get('NODES').split(";")
@@ -52,21 +50,21 @@ def check():
 
     with Pool(len(nodes)) as pool:
         print("Running multithreading")
-        node_data = pool.map(p, nodes, 1)
+        node_data = pool.map(p,nodes, 1)
 
-    # with open('data.csv', 'w',) as csvfile:
-    #     print("Running csv")
-    #     writer = csv.writer(csvfile)
-    #     writer.writerow(['iteration', 'nodeName','peerName', 'time[s]', 'tx', 'rx', 'status_code'])
-    #     for nd in node_data:
-    #         for r in nd:
-    #             writer.writerow([r.iteration, r.node, r.peer, r.time, r.tx, r.rx, r.code])
+    with open('data.csv', 'w',) as csvfile:
+        print("Running csv")
+        writer = csv.writer(csvfile)
+        writer.writerow(['iteration', 'nodeName','peerName', 'time[s]', 'tx', 'rx', 'status_code'])
+        for nd in node_data:
+            for r in nd:
+                writer.writerow([r.iteration, r.node, r.peer, r.time, r.tx, r.rx, r.code])
 
-    node_statuses = []  # Calculating nodes' statuses
+    node_statuses = [] # Calculating nodes' statuses
     for node in node_data:
         if len(node) > 0:
-            all_iterations = len(node)  # All requests count to the node
-            successful_count = len([n for n in node if n.code == 200])  # Working requests count
+            all_iterations = len(node) # All requests count to the node
+            successful_count = len([n for n in node if n.code == 200]) # Working requests count
             status = NodeStatus(node[0].node, successful_count / all_iterations * 100)
             node_statuses.append(status)
 
@@ -77,14 +75,11 @@ def check():
         for ns in node_statuses:
             writer.writerow([ns.node, ns.success_rate, time.time()])
 
-
 if __name__ == "__main__":
-    i = 0
-    while i < 3:  # Runs 3 times
+    while True:
         try:
             check()
             time.sleep(5 * 60)
-            i += 1
         except KeyboardInterrupt:
             print('exiting...')
             break
